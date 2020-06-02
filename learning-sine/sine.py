@@ -6,18 +6,18 @@ import math
 import argparse
 import tensorflow as tf 
 import matplotlib.pyplot as plt
-from keras import losses
-from keras import models
-from keras import regularizers
-from keras.layers.core import Dense
-from keras.layers.core import Dropout
-from keras.layers.core import Flatten
-from keras.layers.recurrent import LSTM
-from keras.layers.recurrent import GRU
-from keras.layers.convolutional import Conv1D
-from keras.callbacks import TensorBoard
-from keras.optimizers import adam
-from keras.layers.advanced_activations import LeakyReLU
+from tensorflow.keras import losses
+from tensorflow.keras import models
+from tensorflow.keras import regularizers
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import GRU
+from tensorflow.keras.layers import Conv1D
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import LeakyReLU
 from shutil import copyfile
 
 INPUT_COUNT = 40
@@ -55,7 +55,7 @@ def getXY(data, total):
 
 # Generate the training and evaluating data sets for data series sin(a*x)
 def getSeries(a, trainCount, testCount=0):
-    data = getSineData(a, trainCount+testCount)
+    data = getSineData(a, trainCount+testCount) # Basically 3300 points for the given frequency
     x,y = getXY(data, trainCount)
     if testCount > INPUT_COUNT:
         evalX, evalY = getXY(data[trainCount:], testCount)
@@ -73,14 +73,16 @@ def buildFCModel():
     model = models.Sequential()
     model.add(Dense(100, input_shape=(INPUT_COUNT,)))
     model.add(LeakyReLU(alpha=0.03))
+
     model.add(Dense(100))
     model.add(LeakyReLU(alpha=0.03))
     model.add(Dense(1))
 
-    model.compile(loss='mse', optimizer=adam(lr=0.0001))
+    model.compile(loss='mse', optimizer=Adam(lr=0.0001))
 
     board = TensorBoard(log_dir='model', histogram_freq=1, write_graph=True, write_images=False)
     board.set_model(model)
+    model.summary()
     return model, board
 
 def buildCNNModel():
@@ -94,10 +96,13 @@ def buildCNNModel():
     model.add(LeakyReLU(alpha=0.03))
     model.add(Dense(1))
 
-    model.compile(loss='mse', optimizer=adam(lr=0.0001))
+    model.compile(loss='mse', optimizer=Adam(lr=0.0001))
 
     board = TensorBoard(log_dir='model', histogram_freq=1, write_graph=True, write_images=False)
     board.set_model(model)
+
+    model.summary()
+
     return model, board
 
 def buildLSTMModel():
@@ -105,7 +110,7 @@ def buildLSTMModel():
     model.add(LSTM(100, batch_input_shape=(1, 1, 1), return_sequences=True, stateful=True))
     model.add(LSTM(100, return_sequences=False, stateful=True))
     model.add(Dense(1))
-    model.compile(loss='mse', optimizer=adam(lr=0.0001))
+    model.compile(loss='mse', optimizer=Adam(lr=0.0001))
 
     board = TensorBoard(log_dir='model', histogram_freq=1, write_graph=True, write_images=False)
     board.set_model(model)
@@ -114,21 +119,21 @@ def buildLSTMModel():
 def testFC():
     model, board = buildFCModel()
 
-    allX, allY, allEX, allEY = getSeries(0.06, 3000, 300)
-    
-    for i in range(1, 10):
-        x, y, evalX, evalY = getSeries(0.06 + i * 0.006, 3000, 300)
+    allX, allY, allEX, allEY = getSeries(0.02, 3000, 300)
+    primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
+    for i in range(1, 50):
+        x, y, evalX, evalY = getSeries(0.02 + i*0.02, 3000, 300)
         allX = np.concatenate((allX, x))
         allY = np.concatenate((allY, y))
         allEX = np.concatenate((allEX, evalX))
         allEY = np.concatenate((allEY, evalY))
     
-    history = model.fit(x=allX, y=allY, validation_data=(allEX, allEY), batch_size=100, epochs=10, callbacks=[board])
+    history = model.fit(x=allX, y=allY, validation_data=(allEX, allEY), batch_size=128, epochs=40, callbacks=[board])
 
-    plotGenerated(model, 0.06)
-    plotGenerated(model, 0.083)
-    plotGenerated(model, 0.163)
-    plotGenerated(model, 0.033)
+    plotGenerated(model, 0.2)
+    plotGenerated(model, 0.6)
+    plotGenerated(model, 3)
+    plotGenerated(model, 7.89)
     return
 
 def testCNN():
@@ -197,6 +202,12 @@ def plotPredicted(model, a):
 # predict the next data in the time series. Then predict more using the generated data points
 # form earlier predictions.
 def plotGenerated(model, a):
+    divisor = 1
+    if not 0.1 < a < 1.0:
+        if 1 < a < 10:
+            divisor = 10
+            a = a/divisor
+
     x, y, eX, eY = getSeries(a, 300)
     predicted = np.zeros((100,))
     gx = x[0].copy()
@@ -204,7 +215,7 @@ def plotGenerated(model, a):
         predicted[i] = model.predict(x=np.array([gx]))
         gx = np.append(gx[1:], predicted[i])
     
-    render(y, predicted, a, 100)
+    render(y/divisor, predicted/divisor, a*divisor, 100)
 
 def plotGeneratedCNN(model, a):
     x, y, eX, eY = getCNNSeries(a, 300, 0)
@@ -248,4 +259,7 @@ def main():
     return
 
 if __name__ == '__main__':
-    main()
+    #main()
+    #testLSTM()
+    testFC()
+    #testCNN()
